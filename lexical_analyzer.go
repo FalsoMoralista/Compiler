@@ -7,29 +7,48 @@ import (
 	"unicode/utf8"
 )
 
-// TODO: (1) Consertar cast de itemEOF como runa/ fixar tipo padrão como runa .
-
 const (
 	itemError itemType = iota // whether an error has ocurred.
-
+	itemKeyword
 	itemDot
 	itemEOF
-	itemElse          // else keyword
-	itemEnd           // end keyword
-	itemField         // identifier, starting with '.'
-	itemIdentifier    // identifier
-	itemIf            // if keyword
-	itemLeftMeta      // left meta-string
-	itemNumber        // number
-	itemLetter        // letter
-	itemPipe          // pipe symbol
-	itemRange         // range keyword
-	itemRawString     // raw quoted string (includes quotes)
-	itemRightMeta     // right meta-string
-	itemString        // quoted string (includes quotes)
-	itemText          // plain text
-	leftMeta          = ""
-	programIdentifier = "program"
+	itemElse       // else keyword
+	itemEnd        // end keyword
+	itemField      // identifier, starting with '.'
+	itemIdentifier // identifier
+	itemIf         // if keyword
+	itemLeftMeta   // left meta-string
+	itemNumber     // number
+	itemLetter     // letter
+	itemPipe       // pipe symbol
+	itemRange      // range keyword
+	itemRawString  // raw quoted string (includes quotes)
+	itemRightMeta  // right meta-string
+	itemString     // quoted string (includes quotes)
+	itemText       // plain text
+	leftMeta       = ""
+
+	// Keywords
+	programKeyword   = "program"
+	varKeyword       = "var"
+	constKeyword     = "const"
+	registerKeyword  = "register"
+	functionKeyword  = "function"
+	procedureKeyword = "procedure"
+	returnKeyword    = "return"
+	mainKeyword      = "main"
+	ifKeyword        = "if"
+	elseKeyword      = "else"
+	whileKeyword     = "while"
+	readKeyword      = "read"
+	writeKeyword     = "write"
+	integerKeyword   = "integer"
+	realKeyword      = "real"
+	booleanKeyword   = "boolean"
+	charKeyword      = "char"
+	stringKeyword    = "string"
+	trueKeyword      = "true"
+	falseKeyword     = "false"
 )
 
 // item Defines a Token (item) structure.
@@ -86,81 +105,70 @@ func (l *lexer) emit(t itemType) {
 // tratando-os individualmente.
 func lexText(l *lexer) stateFn {
 	for {
-		if strings.HasPrefix(l.input[l.pos:], programIdentifier) {
-			if l.pos > l.start { // TODO: Verificar o que isso faz.
-				fmt.Println("Entrou condicao 0")
-				l.emit(itemText)
-			}
-			return lexProgramIdentifier
-		}
-		// Se letra, então identificador, ou letra.
-		r := l.next()
-		if unicode.IsLetter(r) {
+		switch r := l.next(); {
+		case unicode.IsLetter(r):
 			return lexLetter
-		}
-		if unicode.IsSpace(r) {
+		case unicode.IsSpace(r):
 			l.ignore()
-		}
-		if strings.HasPrefix(l.input[l.pos:], leftMeta) {
-			if l.pos > l.start {
-				l.emit(itemText)
+		case unicode.IsDigit(r):
+			return lexNumber
+		case l.accept("+-"):
+			if unicode.IsDigit(l.peek()) {
+				return lexNumber
 			}
-			return lexLeftMeta // Next state.
-		}
-		if l.next() == rune(itemEOF) {
-			break
+		case r == rune(itemEOF):
+			return nil
 		}
 	}
-	// If correctly reached EOF do:
-	if l.pos > l.start {
-		l.emit(itemText)
-	}
-	l.emit(itemEOF)
-	return nil
 }
 
+// lexLetter Letter found. Check whether is
+// If next rune is a whitespace, then emit a letter (token) and go back to initial state.
+// Otherwise it could be other stuff (check-it in lexInsideAction).
 func lexLetter(l *lexer) stateFn {
 	switch r := l.peek(); {
-	case unicode.IsSpace(r):
-		l.emit(itemLetter)
+	case r == rune(itemEOF):
+		l.emit(itemIdentifier)
+		return lexText
+	case unicode.IsLetter(r) || unicode.IsDigit(r) || l.accept("_"):
+		return lexInsideAction
+	default:
+		l.emit(itemIdentifier)
 		return lexText
 	}
-	return lexInsideAction
-}
-
-func lexProgramIdentifier(l *lexer) stateFn {
-	l.pos += len(programIdentifier)
-	l.emit(itemIdentifier)
-	return lexInsideAction // Now inside {{ }}.
-}
-
-func lexLeftMeta(l *lexer) stateFn {
-	l.pos += len(leftMeta)
-	l.emit(itemLeftMeta)
-	return lexInsideAction // Now inside {{ }}.
 }
 
 func lexInsideAction(l *lexer) stateFn {
 	for {
 		switch r := l.next(); {
-		case r == rune(itemEOF):
+		case r == rune(itemEOF): // todo: confirm whether this is redundant or not.
 			return nil
-		case unicode.IsLetter(r):
-			if unicode.IsSpace(l.peek()) {
-				l.emit(itemLetter)
+		case unicode.IsLetter(r) || unicode.IsDigit(r) || strings.IndexRune("_", r) >= 0: // Regular Expression
+			switch next_rune := l.peek(); {
+			case unicode.IsLetter(next_rune) || unicode.IsDigit(next_rune) || strings.IndexRune("_", next_rune) >= 0:
+				return lexInsideAction
+			default:
+				if !strings.Contains("_", l.input[l.start:l.pos]) { // Verify whether is a keyword only if does not contain underline character
+					if !l.emitIfKeyword() { // If not a keyword, emit a identifier then go back to initial state
+						l.emit(itemIdentifier)
+						return lexText
+					}
+					return lexText
+				}
+				l.emit(itemIdentifier)
 				return lexText
 			}
-		case unicode.IsSpace(r):
-			l.ignore()
 		}
 	}
 }
 
+// lexNumber lexes a signed number (digit or multiple digits) incluiding floating point.
 func lexNumber(l *lexer) stateFn {
 	l.accept("+-")
 	digits := "0123456789"
 	l.acceptRun(digits)
 	if l.accept(".") {
+		// TODO: verificar se há algo incorreto pelo meio do número para lançar um erro
 		l.acceptRun(digits)
 	}
 	/*if isAlphaNumeric(l.peek()) {
@@ -169,12 +177,12 @@ func lexNumber(l *lexer) stateFn {
 			l.input[l.start:l.pos])
 	} */
 	l.emit(itemNumber)
-	return lexInsideAction
+	return lexText
 }
 
 // next returns the next rune in the input.
 func (l *lexer) next() (r rune) {
-	if l.pos >= len(l.input) {
+	if l.isEOF() {
 		l.width = 0
 		return rune(itemEOF)
 	}
@@ -195,6 +203,7 @@ func (l *lexer) Debug() {
 	fmt.Println("Item list: ")
 	for i := range l.items {
 		fmt.Println("value: ", i.val)
+		fmt.Println("type: ", i.typ)
 		fmt.Println("length: ", len(string((i.val))))
 		fmt.Println("------------------")
 	}
@@ -211,6 +220,78 @@ func (i item) String() string {
 		return fmt.Sprintf("%.10q...", i.val)
 	}
 	return fmt.Sprintf("%q", i.val)
+}
+
+/* emitIfKeyword Identify whether is a keyword if so, emit.
+We could have worked with an array instead of a switch case,
+although, intentionally using a switch may be useful for distinction
+(if needed) in the future.
+*/
+func (l *lexer) emitIfKeyword() bool {
+	switch word := l.input[l.start:l.pos]; {
+	case word == programKeyword:
+		l.emit(itemKeyword)
+		return true
+	case word == varKeyword:
+		l.emit(itemKeyword)
+		return true
+	case word == constKeyword:
+		l.emit(itemKeyword)
+		return true
+	case word == registerKeyword:
+		l.emit(itemKeyword)
+		return true
+	case word == functionKeyword:
+		l.emit(itemKeyword)
+		return true
+	case word == procedureKeyword:
+		l.emit(itemKeyword)
+		return true
+	case word == returnKeyword:
+		l.emit(itemKeyword)
+		return true
+	case word == mainKeyword:
+		l.emit(itemKeyword)
+		return true
+	case word == ifKeyword:
+		l.emit(itemKeyword)
+		return true
+	case word == elseKeyword:
+		l.emit(itemKeyword)
+		return true
+	case word == whileKeyword:
+		l.emit(itemKeyword)
+		return true
+	case word == readKeyword:
+		l.emit(itemKeyword)
+		return true
+	case word == writeKeyword:
+		l.emit(itemKeyword)
+		return true
+	case word == integerKeyword:
+		l.emit(itemKeyword)
+		return true
+	case word == realKeyword:
+		l.emit(itemKeyword)
+		return true
+	case word == booleanKeyword:
+		l.emit(itemKeyword)
+		return true
+	case word == charKeyword:
+		l.emit(itemKeyword)
+		return true
+	case word == stringKeyword:
+		l.emit(itemKeyword)
+		return true
+	case word == trueKeyword:
+		l.emit(itemKeyword)
+		return true
+	case word == falseKeyword:
+		l.emit(itemKeyword)
+		return true
+	default:
+		return false
+	}
 }
 
 /*
@@ -249,4 +330,11 @@ func (l *lexer) acceptRun(valid string) {
 	for strings.IndexRune(valid, l.next()) >= 0 {
 	}
 	l.backup()
+}
+
+func (l *lexer) isEOF() bool {
+	if l.pos >= len(l.input) {
+		return true
+	}
+	return false
 }
