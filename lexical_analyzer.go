@@ -8,26 +8,28 @@ import (
 )
 
 const (
-	itemError itemType = iota // whether an error has ocurred.
-	itemKeyword
-	itemDot
-	itemEOF
-	itemElse       // else keyword
-	itemEnd        // end keyword
-	itemField      // identifier, starting with '.'
-	itemIdentifier // identifier
-	itemIf         // if keyword
-	itemLeftMeta   // left meta-string
-	itemNumber     // number
-	itemLetter     // letter
-	itemPipe       // pipe symbol
-	itemRange      // range keyword
-	itemRawString  // raw quoted string (includes quotes)
-	itemRightMeta  // right meta-string
-	itemString     // quoted string (includes quotes)
-	itemText       // plain text
-	leftMeta       = ""
+	itemError      itemType = iota // whether an error has ocurred.
+	itemKeyword                    // No.1
+	itemLetter                     // letter
+	itemIdentifier                 // identifier
+	itemDigit                      // single digit
+	itemNumber                     // number
 
+	// itemDot
+	itemEOF
+	itemElse  // else keyword
+	itemEnd   // end keyword
+	itemField // identifier, starting with '.'
+
+	itemIf              // if keyword
+	itemLeftMeta        // left meta-string
+	itemPipe            // pipe symbol
+	itemRange           // range keyword
+	itemRawString       // raw quoted string (includes quotes)
+	itemRightMeta       // right meta-string
+	itemString          // quoted string (includes quotes)
+	itemText            // plain text
+	itemMalformedNumber // Error when lexing number
 	// Keywords
 	programKeyword   = "program"
 	varKeyword       = "var"
@@ -96,6 +98,17 @@ func (l *lexer) run() {
 	close(l.items) // No more tokens will be delivered.
 }
 
+// next returns the next rune in the input.
+func (l *lexer) next() (r rune) {
+	if l.isEOF() {
+		l.width = 0
+		return rune(itemEOF)
+	}
+	r, l.width = utf8.DecodeRuneInString(l.input[l.pos:])
+	l.pos += l.width
+	return r
+}
+
 func (l *lexer) emit(t itemType) {
 	l.items <- item{t, l.input[l.start:l.pos]}
 	l.start = l.pos
@@ -110,103 +123,122 @@ func lexText(l *lexer) stateFn {
 			return lexLetter
 		case unicode.IsSpace(r):
 			l.ignore()
-		case unicode.IsDigit(r):
-			return lexNumber
-		case l.accept("+-"):
-			if unicode.IsDigit(l.peek()) {
-				return lexNumber
+		case strings.IndexRune("+-", r) >= 0, unicode.IsNumber(r):
+			if strings.IndexRune("+-", r) >= 0 {
+				l.next()
+				return lexDigit
 			}
+			return lexDigit
 		case r == rune(itemEOF):
 			return nil
 		}
 	}
 }
 
-// lexLetter Letter found. Check whether is
+// lexLetter
 // If next rune is a whitespace, then emit a letter (token) and go back to initial state.
 // Otherwise it could be other stuff (check-it in lexInsideAction).
 func lexLetter(l *lexer) stateFn {
 	switch r := l.peek(); {
 	case r == rune(itemEOF):
-		l.emit(itemIdentifier)
+		l.emit(itemLetter)
+		l.emit(itemEOF)
 		return lexText
-	case unicode.IsLetter(r) || unicode.IsDigit(r) || l.accept("_"):
+	case l.isIdentifier(r):
 		return lexInsideAction
 	default:
-		l.emit(itemIdentifier)
+		l.emit(itemLetter)
 		return lexText
 	}
+}
+
+func lexIdentifier(l *lexer) stateFn {
+	if !strings.Contains("_", l.input[l.start:l.pos]) { // Verify whether is a keyword only if does not contain underline character
+		if !l.emitIfKeyword() { // If not a keyword, emit a identifier then go back to initial state
+			l.emit(itemIdentifier)
+			return lexText
+		}
+		return lexText
+	}
+	l.emit(itemIdentifier)
+	return lexText
+}
+
+// lexNumber lexes a signed number (digit or multiple digits) including floating point.
+func lexDigit(l *lexer) stateFn {
+	switch r := l.peek(); {
+	case l.isNumber(r):
+		return lexInsideAction
+	default:
+		l.emit(itemDigit)
+		return lexText
+	}
+	/*if isAlphaNumeric(l.peek()) {
+		l.next()
+		return l.errorf("bad number syntax: %q", l.input[l.start:l.pos])
+	} */
+}
+
+func lexNumber(l *lexer) stateFn {
+	//l.next()
+	if strings.Count(l.input[l.start:l.pos], ".") >= 2 {
+		l.emit(itemMalformedNumber)
+		return lexText
+	}
+	l.emit(itemNumber)
+	return lexText
 }
 
 func lexInsideAction(l *lexer) stateFn {
 	for {
 		switch r := l.next(); {
 		case r == rune(itemEOF): // todo: confirm whether this is redundant or not.
+			l.emit(itemEOF)
 			return nil
-		case unicode.IsLetter(r) || unicode.IsDigit(r) || strings.IndexRune("_", r) >= 0: // Regular Expression
-			switch next_rune := l.peek(); {
-			case unicode.IsLetter(next_rune) || unicode.IsDigit(next_rune) || strings.IndexRune("_", next_rune) >= 0:
+		case l.isIdentifier(r):
+			switch nextRune := l.peek(); {
+			case l.isIdentifier(nextRune):
 				return lexInsideAction
 			default:
-				if !strings.Contains("_", l.input[l.start:l.pos]) { // Verify whether is a keyword only if does not contain underline character
-					if !l.emitIfKeyword() { // If not a keyword, emit a identifier then go back to initial state
-						l.emit(itemIdentifier)
-						return lexText
-					}
-					return lexText
-				}
-				l.emit(itemIdentifier)
-				return lexText
+				return lexIdentifier
+			}
+		case l.isNumber(r):
+			switch nextRune := l.peek(); {
+			case l.isNumber(nextRune):
+				return lexInsideAction
+			default:
+				return lexNumber
 			}
 		}
 	}
 }
 
-// lexNumber lexes a signed number (digit or multiple digits) incluiding floating point.
-func lexNumber(l *lexer) stateFn {
-	l.accept("+-")
-	digits := "0123456789"
-	l.acceptRun(digits)
-	if l.accept(".") {
-		// TODO: verificar se há algo incorreto pelo meio do número para lançar um erro
-		l.acceptRun(digits)
+// Regular Expressions:
+
+func (l *lexer) isNumber(r rune) bool {
+	if unicode.IsNumber(r) {
+		return true
 	}
-	/*if isAlphaNumeric(l.peek()) {
-		l.next()
-		return l.errorf("bad number syntax: %q",
-			l.input[l.start:l.pos])
-	} */
-	l.emit(itemNumber)
-	return lexText
+	if strings.IndexRune(".", r) >= 0 {
+		rStart, _ := utf8.DecodeRuneInString(l.input[l.start:])
+		if unicode.IsNumber(rStart) {
+			return true
+		}
+	}
+	return false
 }
 
-// next returns the next rune in the input.
-func (l *lexer) next() (r rune) {
-	if l.isEOF() {
-		l.width = 0
-		return rune(itemEOF)
+func (l *lexer) isIdentifier(r rune) bool {
+	if unicode.IsLetter(r) || strings.IndexRune("_", r) >= 0 {
+		return true
 	}
-	r, l.width = utf8.DecodeRuneInString(l.input[l.pos:])
-	l.pos += l.width
-	return r
-}
-
-// Display display tokens.
-func (l *lexer) Debug() {
-	fmt.Println("Lexer state info: ")
-	fmt.Println("Start index: ")
-	fmt.Println(l.start)
-	fmt.Println("Current index: ")
-	fmt.Println(l.pos)
-	fmt.Println("Last token width: ")
-	fmt.Println(l.width)
-	fmt.Println("Item list: ")
-	for i := range l.items {
-		fmt.Println("value: ", i.val)
-		fmt.Println("type: ", i.typ)
-		fmt.Println("length: ", len(string((i.val))))
-		fmt.Println("------------------")
+	if unicode.IsNumber(r) {
+		rStart, _ := utf8.DecodeRuneInString(l.input[l.start:])
+		if unicode.IsLetter(rStart) {
+			return true
+		}
 	}
+	return false
 }
 
 func (i item) String() string {
@@ -337,4 +369,22 @@ func (l *lexer) isEOF() bool {
 		return true
 	}
 	return false
+}
+
+// Display tokens.
+func (l *lexer) Debug() {
+	fmt.Println("Lexer state info: ")
+	fmt.Println("Start index: ")
+	fmt.Println(l.start)
+	fmt.Println("Current index: ")
+	fmt.Println(l.pos)
+	fmt.Println("Last token width: ")
+	fmt.Println(l.width)
+	fmt.Println("Item list: ")
+	for i := range l.items {
+		fmt.Println("value: ", i.val)
+		fmt.Println("type: ", i.typ)
+		fmt.Println("length: ", len(string((i.val))))
+		fmt.Println("------------------")
+	}
 }
