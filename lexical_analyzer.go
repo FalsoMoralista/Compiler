@@ -114,8 +114,7 @@ func (l *lexer) emit(t itemType) {
 	l.start = l.pos
 }
 
-// lexText A partir de um estado inicial, eg., leftMeta, procura por lexemas,
-// tratando-os individualmente.
+// lexText A partir de um estado inicial procura por lexemas tratando-os individualmente.
 func lexText(l *lexer) stateFn {
 	for {
 		switch r := l.next(); {
@@ -123,13 +122,10 @@ func lexText(l *lexer) stateFn {
 			return lexLetter
 		case unicode.IsSpace(r):
 			l.ignore()
-		case strings.IndexRune("+-", r) >= 0, unicode.IsNumber(r):
-			if strings.IndexRune("+-", r) >= 0 {
-				l.next()
-				return lexDigit
-			}
-			return lexDigit
+		case strings.IndexRune("+-", r) >= 0, unicode.IsNumber(r): // todo: verify whether is plus or minus, based on that do the following possible verifications.
+			return lexNumber
 		case r == rune(itemEOF):
+			l.emit(itemEOF)
 			return nil
 		}
 	}
@@ -139,22 +135,30 @@ func lexText(l *lexer) stateFn {
 // If next rune is a whitespace, then emit a letter (token) and go back to initial state.
 // Otherwise it could be other stuff (check-it in lexInsideAction).
 func lexLetter(l *lexer) stateFn {
-	switch r := l.peek(); {
+	switch r := l.next(); {
 	case r == rune(itemEOF):
 		l.emit(itemLetter)
 		l.emit(itemEOF)
 		return lexText
 	case l.isIdentifier(r):
-		return lexInsideAction
+		switch nextRune := l.peek(); {
+		case l.isIdentifier(nextRune):
+			return lexLetter
+		default:
+			return lexIdentifier
+		}
 	default:
+		l.backup()
 		l.emit(itemLetter)
 		return lexText
 	}
 }
 
+// lexIdentifier At this point, the word is already formed,
+// thus we need to verify whether is either an identifier or keyword.
 func lexIdentifier(l *lexer) stateFn {
-	if !strings.Contains("_", l.input[l.start:l.pos]) { // Verify whether is a keyword only if does not contain underline character
-		if !l.emitIfKeyword() { // If not a keyword, emit a identifier then go back to initial state
+	if !strings.Contains("_", l.input[l.start:l.pos]) { // Verify whether is a keyword, only if it does not contain underline character
+		if !l.emitIfKeyword() { // If not a keyword, emit an identifier then go back to initial state.
 			l.emit(itemIdentifier)
 			return lexText
 		}
@@ -165,80 +169,43 @@ func lexIdentifier(l *lexer) stateFn {
 }
 
 // lexNumber lexes a signed number (digit or multiple digits) including floating point.
-func lexDigit(l *lexer) stateFn {
-	switch r := l.peek(); {
-	case l.isNumber(r):
-		return lexInsideAction
-	default:
-		l.emit(itemDigit)
+func lexNumber(l *lexer) stateFn {
+	digits := "0123456789"
+	l.acceptRun(digits)
+	if l.accept(".") { // todo: check error possibilities to implement here
+		l.acceptRun(digits)
+	}
+	if len(l.input[l.start:l.pos]) > 1 {
+		l.emit(itemNumber)
 		return lexText
 	}
+	l.emit(itemDigit)
+	return lexText
+	// backup codes  todo: review before delete.
 	/*if isAlphaNumeric(l.peek()) {
 		l.next()
 		return l.errorf("bad number syntax: %q", l.input[l.start:l.pos])
 	} */
-}
 
-func lexNumber(l *lexer) stateFn {
-	//l.next()
-	if strings.Count(l.input[l.start:l.pos], ".") >= 2 {
-		l.emit(itemMalformedNumber)
-		return lexText
-	}
-	l.emit(itemNumber)
-	return lexText
-}
-
-func lexInsideAction(l *lexer) stateFn {
-	for {
-		switch r := l.next(); {
-		case r == rune(itemEOF): // todo: confirm whether this is redundant or not.
-			l.emit(itemEOF)
-			return nil
-		case l.isIdentifier(r):
-			switch nextRune := l.peek(); {
-			case l.isIdentifier(nextRune):
-				return lexInsideAction
-			default:
-				return lexIdentifier
-			}
-		case l.isNumber(r):
-			switch nextRune := l.peek(); {
-			case l.isNumber(nextRune):
-				return lexInsideAction
-			default:
-				return lexNumber
+	/*	if strings.IndexRune(".", r) >= 0 {
+			rStart, _ := utf8.DecodeRuneInString(l.input[l.start:])
+			if unicode.IsNumber(rStart) {
+				return true
 			}
 		}
-	}
-}
-
-// Regular Expressions:
-
-func (l *lexer) isNumber(r rune) bool {
-	if unicode.IsNumber(r) {
-		return true
-	}
-	if strings.IndexRune(".", r) >= 0 {
-		rStart, _ := utf8.DecodeRuneInString(l.input[l.start:])
-		if unicode.IsNumber(rStart) {
-			return true
-		}
-	}
-	return false
+		return false
+	*/
 }
 
 func (l *lexer) isIdentifier(r rune) bool {
-	if unicode.IsLetter(r) || strings.IndexRune("_", r) >= 0 {
-		return true
-	}
-	if unicode.IsNumber(r) {
-		rStart, _ := utf8.DecodeRuneInString(l.input[l.start:])
-		if unicode.IsLetter(rStart) {
-			return true
+	return unicode.IsLetter(r) || unicode.IsNumber(r) || strings.IndexRune("_", r) >= 0
+	/*	if unicode.IsNumber(r) {
+			rStart, _ := utf8.DecodeRuneInString(l.input[l.start:])
+			if unicode.IsLetter(rStart) {
+				return true
+			}
 		}
-	}
-	return false
+		return false*/ //  Backup Code (for now) todo: review before delete.
 }
 
 func (i item) String() string {
