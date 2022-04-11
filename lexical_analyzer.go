@@ -36,7 +36,7 @@ const (
 	functionKeyword  = "function"
 	procedureKeyword = "procedure"
 	returnKeyword    = "return"
-	mainKeyword      = "test"
+	mainKeyword      = "main"
 	ifKeyword        = "if"
 	elseKeyword      = "else"
 	whileKeyword     = "while"
@@ -156,7 +156,7 @@ func lexLetter(l *lexer) stateFn {
 	case r == rune(tokenEOF):
 		l.emit(tokenLetter)
 		l.emit(tokenEOF)
-		return lexText
+		return nil
 	case l.isIdentifier(r):
 		switch nextRune := l.peek(); {
 		case l.isIdentifier(nextRune):
