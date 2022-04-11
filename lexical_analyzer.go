@@ -17,6 +17,8 @@ const (
 	tokenArithmeticOp
 	tokenBlockComment
 	tokenEOF
+	tokenRelationalOp
+	tokenLogicalOp
 
 	tokenIf              // if keyword
 	tokenLeftMeta        // left meta-string
@@ -131,6 +133,18 @@ func lexText(l *lexer) stateFn {
 			}
 			l.backup()
 			return lexArithmeticOperator
+		case strings.IndexRune("&|!", r) >= 0:
+			if strings.IndexRune("=", l.peek()) >= 0 {
+				return lexRelationalOperator
+			}
+			l.backup()
+			return lexLogigcalOperator
+		case strings.IndexRune("=!><", r) >= 0:
+			if strings.IndexRune("=", l.peek()) >= 0 {
+				return lexRelationalOperator
+			}
+			l.backup()
+			return lexRelationalOperator
 		case strings.IndexRune("/", r) >= 0 || strings.IndexRune("*", r) >= 0:
 			if strings.IndexRune("/", r) >= 0 { // If (r == / or *) check whether it could possibly be a comment block.
 				if !(strings.IndexRune("#", l.peek()) >= 0) { // If not, emit an arithmetic operator (/)
@@ -230,6 +244,26 @@ func lexCommentBlock(l *lexer) stateFn {
 			return nil
 		}
 	}
+}
+
+func lexRelationalOperator(l *lexer) stateFn {
+	l.next()
+	l.emit(tokenRelationalOp)
+	return lexText
+}
+
+func lexLogigcalOperator(l *lexer) stateFn {
+	switch r := l.next(); {
+	case strings.IndexRune("&", r) >= 0 && strings.IndexRune("&", l.peek()) >= 0:
+		l.next()
+		l.emit(tokenLogicalOp)
+	case strings.IndexRune("|", r) >= 0 && strings.IndexRune("|", l.peek()) >= 0:
+		l.next()
+		l.emit(tokenLogicalOp)
+	default:
+		l.emit(tokenLogicalOp)
+	}
+	return lexText
 }
 
 // isIdentifier return whether it could be identifier or not.
@@ -379,8 +413,51 @@ func (l *lexer) Debug() {
 	fmt.Println("token list: ")
 	for i := range l.tokens {
 		fmt.Println("value: ", i.val)
-		fmt.Println("type: ", i.typ)
+		fmt.Println("type index: ", i.typ)
+		fmt.Println("type name: ", [...]string{"tokenError",
+			"tokenKeyword",
+			"tokenLetter",
+			"tokenIdentifier",
+			"tokenDigit",
+			"tokenNumber",
+			"tokenArithmeticOp",
+			"tokenBlockComment",
+			"tokenEOF",
+			"tokenRelationalOp",
+			"tokenLogicalOp",
+
+			"tokenIf",
+			"tokenLeftMeta",
+			"tokenPipe",
+			"tokenRange",
+			"tokenRawString",
+			"tokenRightMeta",
+			"tokenString",
+			"tokenText",
+			"tokenMalformedNumber",
+			"tokenMalformedComment",
+
+			"programKeyword",
+			"varKeyword",
+			"constKeyword",
+			"registerKeyword",
+			"functionKeyword",
+			"procedureKeyword",
+			"returnKeyword",
+			"mainKeyword",
+			"ifKeyword",
+			"elseKeyword",
+			"whileKeyword",
+			"readKeyword",
+			"writeKeyword",
+			"integerKeyword",
+			"realKeyword",
+			"booleanKeyword",
+			"charKeyword",
+			"stringKeyword",
+			"trueKeyword",
+			"falseKeyword"}[i.typ])
 		fmt.Println("length: ", len(string((i.val))))
-		fmt.Println("------------------")
+		fmt.Println("--------------------------------")
 	}
 }
