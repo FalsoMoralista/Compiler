@@ -19,6 +19,9 @@ const (
 	tokenEOF
 	tokenRelationalOp
 	tokenLogicalOp
+	tokenDelimiter
+	tokenChar
+	tokenMalformedChar
 
 	tokenIf              // if keyword
 	tokenLeftMeta        // left meta-string
@@ -145,6 +148,21 @@ func lexText(l *lexer) stateFn {
 			}
 			l.backup()
 			return lexRelationalOperator
+		case strings.IndexRune(";,(){}[].:", r) >= 0:
+			l.backup()
+			return lexDelimiter
+
+		// TODO: Working for rights cases. Not working for: 'a''dfds'
+		case strings.IndexRune("'", r) >= 0:
+			if unicode.IsLetter(l.peek()) {
+				if strings.IndexRune("'", l.next()) >= 0 {
+					return lexChar
+				}
+			} else {
+				l.emit(tokenMalformedChar)
+				return lexText
+			}
+			return lexChar
 		case strings.IndexRune("/", r) >= 0 || strings.IndexRune("*", r) >= 0:
 			if strings.IndexRune("/", r) >= 0 { // If (r == / or *) check whether it could possibly be a comment block.
 				if !(strings.IndexRune("#", l.peek()) >= 0) { // If not, emit an arithmetic operator (/)
@@ -249,6 +267,18 @@ func lexCommentBlock(l *lexer) stateFn {
 func lexRelationalOperator(l *lexer) stateFn {
 	l.next()
 	l.emit(tokenRelationalOp)
+	return lexText
+}
+
+func lexDelimiter(l *lexer) stateFn {
+	l.next()
+	l.emit(tokenDelimiter)
+	return lexText
+}
+
+func lexChar(l *lexer) stateFn {
+	l.next()
+	l.emit(tokenChar)
 	return lexText
 }
 
@@ -425,6 +455,9 @@ func (l *lexer) Debug() {
 			"tokenEOF",
 			"tokenRelationalOp",
 			"tokenLogicalOp",
+			"tokenDelimiter",
+			"tokenChar",
+			"tokenMalformedChar",
 
 			"tokenIf",
 			"tokenLeftMeta",
