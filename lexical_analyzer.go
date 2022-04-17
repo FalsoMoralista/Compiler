@@ -127,23 +127,14 @@ func lexText(l *lexer) stateFn {
 			return lexLetter
 		case unicode.IsSpace(r):
 			l.ignore()
-		case strings.IndexRune("+-", r) >= 0, unicode.IsNumber(r):
-			if strings.IndexRune("+", r) >= 0 || strings.IndexRune("-", r) >= 0 {
-				if unicode.IsNumber(l.peek()) {
-					return lexNumber
-				}
-			}
-			if unicode.IsNumber(r) {
-				return lexNumber
-			}
-			l.backup()
-			return lexArithmeticOperator
+		case unicode.IsNumber(r):
+			return lexNumber
 		case strings.IndexRune("&|!", r) >= 0:
 			if strings.IndexRune("=", l.peek()) >= 0 {
 				return lexRelationalOperator
 			}
 			l.backup()
-			return lexLogigcalOperator
+			return lexLogicalOperator
 		case strings.IndexRune("=!><", r) >= 0:
 			if strings.IndexRune("=", l.peek()) >= 0 {
 				return lexRelationalOperator
@@ -176,6 +167,8 @@ func lexText(l *lexer) stateFn {
 			if strings.IndexRune("*", r) >= 0 { // Verification not necessary but left intentionally for legibility.
 				l.emit(tokenArithmeticOp)
 			}
+		case l.accept("+") || l.accept("-"):
+			l.emit(tokenArithmeticOp)
 		case r == rune(tokenEOF):
 			l.emit(tokenEOF)
 			return nil
@@ -188,7 +181,7 @@ func lexText(l *lexer) stateFn {
 func lexLetter(l *lexer) stateFn {
 	switch r := l.next(); {
 	case r == rune(tokenEOF):
-		l.emit(tokenLetter)
+		l.emit(tokenIdentifier)
 		l.emit(tokenEOF)
 		return nil
 	case l.isIdentifier(r):
@@ -200,7 +193,7 @@ func lexLetter(l *lexer) stateFn {
 		}
 	default:
 		l.backup()
-		l.emit(tokenLetter)
+		l.emit(tokenIdentifier)
 		return lexText
 	}
 }
@@ -219,18 +212,24 @@ func lexIdentifier(l *lexer) stateFn {
 	return lexText
 }
 
-// lexNumber lexes a signed number (digit or multiple digits) including floating point.
+// lexNumber lexes a number (digit or multiple digits) including floating point.
 func lexNumber(l *lexer) stateFn {
 	digits := "0123456789"
 	l.acceptRun(digits)
-	if l.accept(".") { // todo: check error possibilities to implement here
-		l.acceptRun(digits)
+
+	if strings.IndexRune(".", l.next()) >= 0 {
+		switch r := l.peek(); {
+		case unicode.IsNumber(r):
+			l.acceptRun(digits)
+			l.emit(tokenNumber)
+			return lexText
+		default:
+			l.backup()
+			l.emit(tokenMalformedNumber)
+		}
 	}
-	if len(l.input[l.start:l.pos]) > 1 {
-		l.emit(tokenNumber)
-		return lexText
-	}
-	l.emit(tokenDigit)
+	l.backup()
+	l.emit(tokenNumber)
 	return lexText
 }
 
@@ -299,7 +298,7 @@ func lexString(l *lexer) stateFn {
 	}
 }
 
-func lexLogigcalOperator(l *lexer) stateFn {
+func lexLogicalOperator(l *lexer) stateFn {
 	switch r := l.next(); {
 	case strings.IndexRune("&", r) >= 0 && strings.IndexRune("&", l.peek()) >= 0:
 		l.next()
