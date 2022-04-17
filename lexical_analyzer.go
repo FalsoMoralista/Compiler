@@ -33,6 +33,8 @@ const (
 	tokenText            // plain text
 	tokenMalformedNumber // Error when lexing number
 	tokenMalformedComment
+	tokenMalformedString
+
 	// Keywords
 	programKeyword   = "program"
 	varKeyword       = "var"
@@ -151,10 +153,8 @@ func lexText(l *lexer) stateFn {
 		case strings.IndexRune(";,(){}[].:", r) >= 0:
 			l.backup()
 			return lexDelimiter
-
-		// TODO: Working for rights cases. Not working for: 'a''dfds'
 		case strings.IndexRune("'", r) >= 0:
-			if unicode.IsLetter(l.peek()) {
+			if unicode.IsLetter(l.peek()) || unicode.IsDigit(l.peek()) {
 				if strings.IndexRune("'", l.next()) >= 0 {
 					return lexChar
 				}
@@ -163,6 +163,8 @@ func lexText(l *lexer) stateFn {
 				return lexText
 			}
 			return lexChar
+		case strings.IndexRune("\"", r) >= 0:
+			return lexString
 		case strings.IndexRune("/", r) >= 0 || strings.IndexRune("*", r) >= 0:
 			if strings.IndexRune("/", r) >= 0 { // If (r == / or *) check whether it could possibly be a comment block.
 				if !(strings.IndexRune("#", l.peek()) >= 0) { // If not, emit an arithmetic operator (/)
@@ -280,6 +282,21 @@ func lexChar(l *lexer) stateFn {
 	l.next()
 	l.emit(tokenChar)
 	return lexText
+}
+
+func lexString(l *lexer) stateFn {
+	for {
+		switch r := l.next(); {
+		case strings.IndexRune("\"", r) >= 0:
+			l.next()
+			l.emit(tokenString)
+			return lexText
+		case r == rune(tokenEOF):
+			l.emit(tokenMalformedString)
+			l.emit(tokenEOF)
+			return nil
+		}
+	}
 }
 
 func lexLogigcalOperator(l *lexer) stateFn {
@@ -469,6 +486,7 @@ func (l *lexer) Debug() {
 			"tokenText",
 			"tokenMalformedNumber",
 			"tokenMalformedComment",
+			"tokenMalformedString",
 
 			"programKeyword",
 			"varKeyword",
