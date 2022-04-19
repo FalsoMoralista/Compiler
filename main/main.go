@@ -2,7 +2,6 @@ package main
 
 import (
 	"compiladores/Compiler"
-	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
@@ -21,7 +20,6 @@ func Run() {
 		panic(err)
 	}
 	for _, file := range files {
-		fmt.Println(file)
 		matchFile, _ := regexp.MatchString("input(\\d+)?(\\.txt)", file)
 		if matchFile {
 			// busca por números na string
