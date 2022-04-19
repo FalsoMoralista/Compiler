@@ -113,7 +113,7 @@ func check(e error) {
 }
 
 func outputTokens(l *lexer) {
-	filename := "/Users/lucianoaraujo/Desktop/output.txt" // TODO FIX
+	filename := "./output.txt"
 	delim := "-----------------------------------------------------------------------------------------------------------------\n"
 	header := "|\t\t" + "Valor" + "\t\t|" + "\t\t" + "Tipo" + "\t\t|\t\t\t" + "Linha" + "\t\t\t|\n"
 	f, err := os.OpenFile(filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
@@ -389,7 +389,7 @@ func lexString(l *lexer) stateFn {
 	for {
 		switch r := l.next(); {
 		case strings.IndexRune("\"", r) >= 0:
-			l.next()
+			//l.next()
 			l.emit(tokenString)
 			return lexText
 		case r == rune(tokenEOF):
