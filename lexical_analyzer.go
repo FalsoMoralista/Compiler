@@ -2,6 +2,8 @@ package Compiler
 
 import (
 	"fmt"
+	"os"
+	"strconv"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -34,6 +36,9 @@ const (
 	tokenMalformedNumber // Error when lexing number
 	tokenMalformedComment
 	tokenMalformedString
+	tokenMalformedLogicalOp
+	tokenMalformedArithmeticOp
+	tokenMalformedRelationalOp
 
 	// Keywords
 	programKeyword   = "program"
@@ -60,8 +65,9 @@ const (
 
 // token Defines a Token (token) structure.
 type token struct {
-	typ tokenType
-	val string
+	typ  tokenType
+	val  string
+	line int
 }
 
 type tokenType int
@@ -75,6 +81,7 @@ type lexer struct {
 	start  int        // start position of this token
 	pos    int        // current position in the input
 	width  int        // width of last rune read
+	line   int        // line counter
 	tokens chan token // channel of the scanned items
 }
 
@@ -90,8 +97,71 @@ func Lex(name, input string) *lexer {
 		tokens: make(chan token),
 	}
 	go l.run() // Concurrently runs the state machine.
-	//time.Sleep(time.Second)
+	_, open := <-l.tokens
+
+	for !open { // Waits until channel is not closed...
+
+	}
+	outputTokens(l)
 	return l
+}
+
+func check(e error) {
+	if e != nil {
+		panic(e)
+	}
+}
+
+func outputTokens(l *lexer) {
+	filename := "/Users/lucianoaraujo/Desktop/output.txt" // TODO FIX
+	delim := "-----------------------------------------------------------------------------------------------------------------\n"
+	header := "|\t\t" + "Valor" + "\t\t|" + "\t\t" + "Tipo" + "\t\t|\t\t\t" + "Linha" + "\t\t\t|\n"
+	f, err := os.OpenFile(filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	check(err)
+	_, err = f.Write([]byte(header))
+	check(err)
+	_, err = f.Write([]byte(delim))
+	check(err)
+
+	tokens := make([]token, 0)
+	for t := range l.tokens {
+		tokens = append(tokens, t)
+		fmtStr := "|\t\t" + t.val + "\t\t|" + "\t\t" + parseTokenType(t) + "\t\t|\t\t" + strconv.Itoa(t.line) + "\t\t|\n"
+		_, err = f.Write([]byte(fmtStr))
+		check(err)
+		_, err = f.Write([]byte(delim))
+		check(err)
+	}
+
+	errorList := checkErrors(tokens)
+	if len(errorList) > 0 {
+		delim = "\n\n----------------------------------------------------------------\n"
+		_, err = f.Write([]byte(delim))
+		fmtStr := "|\t\t\tLista de Erro(s)\t\t\t|\n"
+		delim = "----------------------------------------------------------------\n"
+		_, err = f.Write([]byte(fmtStr))
+		check(err)
+		_, err = f.Write([]byte(delim))
+		check(err)
+		header = "|\t\t\tTIPO\t\t\t|\tLINHA\t|\n"
+		_, err = f.Write([]byte(header))
+		check(err)
+		_, err = f.Write([]byte(delim))
+		check(err)
+
+		for i := range errorList {
+			t := errorList[i]
+			fmtStr = "|\t\t" + parseTokenType(t) + "\t\t|\t" + strconv.Itoa(t.line) + "\t|\n"
+			_, err = f.Write([]byte(fmtStr))
+			check(err)
+			_, err = f.Write([]byte(delim))
+			check(err)
+		}
+	} else {
+		fmtStr := "|\tNENHUM ERRO ENCONTRADO\t|\n"
+		_, err = f.Write([]byte(fmtStr))
+		check(err)
+	}
 }
 
 // run Lexes the input by executing state functions
@@ -115,7 +185,7 @@ func (l *lexer) next() (r rune) {
 }
 
 func (l *lexer) emit(t tokenType) {
-	l.tokens <- token{t, l.input[l.start:l.pos]}
+	l.tokens <- token{t, l.input[l.start:l.pos], l.line}
 	l.start = l.pos
 }
 
@@ -126,19 +196,20 @@ func lexText(l *lexer) stateFn {
 		case unicode.IsLetter(r):
 			return lexLetter
 		case unicode.IsSpace(r):
+			if strings.IndexRune("\n", r) >= 0 {
+				l.line += 1
+			}
 			l.ignore()
 		case unicode.IsNumber(r):
 			return lexNumber
 		case strings.IndexRune("&|!", r) >= 0:
-			if strings.IndexRune("=", l.peek()) >= 0 {
-				return lexRelationalOperator
+			if strings.IndexRune("!", r) >= 0 && strings.IndexRune("=", r) >= 0 {
+				l.emit(tokenRelationalOp)
+				return lexText
 			}
 			l.backup()
 			return lexLogicalOperator
 		case strings.IndexRune("=!><", r) >= 0:
-			if strings.IndexRune("=", l.peek()) >= 0 {
-				return lexRelationalOperator
-			}
 			l.backup()
 			return lexRelationalOperator
 		case strings.IndexRune(";,(){}[].:", r) >= 0:
@@ -167,8 +238,9 @@ func lexText(l *lexer) stateFn {
 			if strings.IndexRune("*", r) >= 0 { // Verification not necessary but left intentionally for legibility.
 				l.emit(tokenArithmeticOp)
 			}
-		case l.accept("+") || l.accept("-"):
-			l.emit(tokenArithmeticOp)
+		case strings.IndexRune("+-*", r) >= 0:
+			l.backup()
+			return lexArithmeticOperator
 		case r == rune(tokenEOF):
 			l.emit(tokenEOF)
 			return nil
@@ -177,7 +249,7 @@ func lexText(l *lexer) stateFn {
 }
 
 // lexLetter If next rune is a whitespace, then emit a letter (token) and go back to initial state.
-// Otherwise it could be a keyword or identifier, then handle it as so.
+// Otherwise, it could be a keyword or identifier, then handle it as so.
 func lexLetter(l *lexer) stateFn {
 	switch r := l.next(); {
 	case r == rune(tokenEOF):
@@ -241,8 +313,14 @@ func lexArithmeticOperator(l *lexer) stateFn {
 	case strings.IndexRune("-", r) >= 0 && strings.IndexRune("-", l.peek()) >= 0:
 		l.next()
 		l.emit(tokenArithmeticOp)
-	default:
+	case strings.IndexRune("-", r) >= 0:
 		l.emit(tokenArithmeticOp)
+	case strings.IndexRune("+", r) >= 0:
+		l.emit(tokenArithmeticOp)
+	case strings.IndexRune("*", r) >= 0:
+		l.emit(tokenArithmeticOp)
+	default:
+		l.emit(tokenMalformedArithmeticOp)
 	}
 	return lexText
 }
@@ -266,8 +344,32 @@ func lexCommentBlock(l *lexer) stateFn {
 }
 
 func lexRelationalOperator(l *lexer) stateFn {
-	l.next()
-	l.emit(tokenRelationalOp)
+	switch r := l.next(); {
+	case strings.IndexRune("=", r) >= 0:
+		if strings.IndexRune("=", l.peek()) >= 0 {
+			l.next()
+			l.emit(tokenArithmeticOp)
+			return lexText
+		}
+		l.emit(tokenArithmeticOp)
+	case strings.IndexRune(">", r) >= 0:
+		if strings.IndexRune("=", l.peek()) >= 0 {
+			l.next()
+			l.emit(tokenRelationalOp)
+			return lexText
+		}
+
+		l.emit(tokenRelationalOp)
+	case strings.IndexRune("<", r) >= 0:
+		if strings.IndexRune("=", l.peek()) >= 0 {
+			l.next()
+			l.emit(tokenRelationalOp)
+			return lexText
+		}
+		l.emit(tokenRelationalOp)
+	default:
+		l.emit(tokenMalformedRelationalOp)
+	}
 	return lexText
 }
 
@@ -306,8 +408,10 @@ func lexLogicalOperator(l *lexer) stateFn {
 	case strings.IndexRune("|", r) >= 0 && strings.IndexRune("|", l.peek()) >= 0:
 		l.next()
 		l.emit(tokenLogicalOp)
-	default:
+	case strings.IndexRune("!", r) >= 0:
 		l.emit(tokenLogicalOp)
+	default:
+		l.emit(tokenMalformedLogicalOp)
 	}
 	return lexText
 }
@@ -447,7 +551,7 @@ func (l *lexer) isEOF() bool {
 	return false
 }
 
-// Display tokens.
+// Debug Display tokens.
 func (l *lexer) Debug() {
 	fmt.Println("Lexer state info: ")
 	fmt.Println("Start index: ")
@@ -486,6 +590,8 @@ func (l *lexer) Debug() {
 			"tokenMalformedNumber",
 			"tokenMalformedComment",
 			"tokenMalformedString",
+			"tokenMalformedLogicalOp",
+			"tokenMalformedArithmeticOp",
 
 			"programKeyword",
 			"varKeyword",
@@ -507,7 +613,73 @@ func (l *lexer) Debug() {
 			"stringKeyword",
 			"trueKeyword",
 			"falseKeyword"}[i.typ])
-		fmt.Println("length: ", len(string((i.val))))
+		fmt.Println("length: ", len(i.val))
 		fmt.Println("--------------------------------")
 	}
+}
+
+func checkErrors(tokens []token) []token {
+	errorList := [5]tokenType{tokenMalformedNumber, tokenMalformedComment, tokenMalformedString, tokenMalformedLogicalOp, tokenMalformedArithmeticOp}
+	errors := make([]token, 0)
+
+	for t := range tokens {
+		for e := range errorList {
+			if errorList[e] == tokens[t].typ {
+				errors = append(errors, tokens[t])
+			}
+		}
+	}
+	return errors
+}
+
+func parseTokenType(t token) string {
+	return [...]string{"tokenError",
+		"tokenKeyword",
+		"tokenLetter",
+		"tokenIdentifier",
+		"tokenDigit",
+		"tokenNumber",
+		"tokenArithmeticOp",
+		"tokenBlockComment",
+		"tokenEOF",
+		"tokenRelationalOp",
+		"tokenLogicalOp",
+		"tokenDelimiter",
+		"tokenChar",
+		"tokenMalformedChar",
+
+		"tokenIf",
+		"tokenLeftMeta",
+		"tokenPipe",
+		"tokenRange",
+		"tokenRawString",
+		"tokenRightMeta",
+		"tokenString",
+		"tokenText",
+		"tokenMalformedNumber",
+		"tokenMalformedComment",
+		"tokenMalformedString",
+		"tokenMalformedLogicalOp",
+		"tokenMalformedArithmeticOp",
+
+		"programKeyword",
+		"varKeyword",
+		"constKeyword",
+		"registerKeyword",
+		"functionKeyword",
+		"procedureKeyword",
+		"returnKeyword",
+		"mainKeyword",
+		"ifKeyword",
+		"elseKeyword",
+		"whileKeyword",
+		"readKeyword",
+		"writeKeyword",
+		"integerKeyword",
+		"realKeyword",
+		"booleanKeyword",
+		"charKeyword",
+		"stringKeyword",
+		"trueKeyword",
+		"falseKeyword"}[t.typ]
 }
