@@ -72,6 +72,8 @@ type token struct {
 
 type tokenType int
 
+var outputFileName string
+
 // lexer Holds the state of the scanner.
 // start is where the next token sent out begins.
 // pos is where we are in the scanning.
@@ -90,7 +92,8 @@ type lexer struct {
 type stateFn func(*lexer) stateFn
 
 // Lex a constructor.
-func Lex(name, input string) *lexer {
+func Lex(name, fileNameOutput, input string) *lexer {
+	outputFileName = fileNameOutput
 	l := &lexer{
 		name:   name,
 		input:  input,
@@ -113,10 +116,9 @@ func check(e error) {
 }
 
 func outputTokens(l *lexer) {
-	filename := "./output.txt"
 	delim := "-----------------------------------------------------------------------------------------------------------------\n"
 	header := "|\t\t" + "Valor" + "\t\t|" + "\t\t" + "Tipo" + "\t\t|\t\t\t" + "Linha" + "\t\t\t|\n"
-	f, err := os.OpenFile(filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(outputFileName, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	check(err)
 	_, err = f.Write([]byte(header))
 	check(err)
