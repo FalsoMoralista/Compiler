@@ -1,0 +1,8 @@
+p program Programa1;
+
+var
+{
+	integer cont;
+	real MINPESO, maxpeso, a, b;
+	char c;
+}

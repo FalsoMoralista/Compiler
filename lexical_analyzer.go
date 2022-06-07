@@ -41,36 +41,38 @@ const (
 	tokenMalformedRelationalOp
 
 	// Keywords
-	programKeyword   = "program"
-	varKeyword       = "var"
-	constKeyword     = "const"
-	registerKeyword  = "register"
-	functionKeyword  = "function"
-	procedureKeyword = "procedure"
-	returnKeyword    = "return"
-	mainKeyword      = "main"
-	ifKeyword        = "if"
-	elseKeyword      = "else"
-	whileKeyword     = "while"
-	readKeyword      = "read"
-	writeKeyword     = "write"
-	integerKeyword   = "integer"
-	realKeyword      = "real"
-	booleanKeyword   = "boolean"
-	charKeyword      = "char"
-	stringKeyword    = "string"
-	trueKeyword      = "true"
-	falseKeyword     = "false"
+	ProgramKeyword   = "program"
+	VarKeyword       = "var"
+	ConstKeyword     = "const"
+	RegisterKeyword  = "register"
+	FunctionKeyword  = "function"
+	ProcedureKeyword = "procedure"
+	ReturnKeyword    = "return"
+	MainKeyword      = "main"
+	IfKeyword        = "if"
+	ElseKeyword      = "else"
+	WhileKeyword     = "while"
+	ReadKeyword      = "read"
+	WriteKeyword     = "write"
+	IntegerKeyword   = "integer"
+	RealKeyword      = "real"
+	BooleanKeyword   = "boolean"
+	CharKeyword      = "char"
+	StringKeyword    = "string"
+	TrueKeyword      = "true"
+	FalseKeyword     = "false"
 )
 
 // token Defines a Token (token) structure.
 type token struct {
-	typ  tokenType
-	val  string
+	Typ  tokenType
+	Val  string
 	line int
 }
 
 type tokenType int
+
+var outputFileName string
 
 // lexer Holds the state of the scanner.
 // start is where the next token sent out begins.
@@ -85,12 +87,17 @@ type lexer struct {
 	tokens chan token // channel of the scanned items
 }
 
+func (l *lexer) Tokens() chan token {
+	return l.tokens
+}
+
 // stateFn Represents the state of the scanner
 // as a function that returns the next state.
 type stateFn func(*lexer) stateFn
 
 // Lex a constructor.
-func Lex(name, input string) *lexer {
+func Lex(name, fileNameOutput, input string) *lexer {
+	outputFileName = fileNameOutput
 	l := &lexer{
 		name:   name,
 		input:  input,
@@ -113,54 +120,55 @@ func check(e error) {
 }
 
 func outputTokens(l *lexer) {
-	filename := "/Users/lucianoaraujo/Desktop/output.txt" // TODO FIX
-	delim := "-----------------------------------------------------------------------------------------------------------------\n"
-	header := "|\t\t" + "Valor" + "\t\t|" + "\t\t" + "Tipo" + "\t\t|\t\t\t" + "Linha" + "\t\t\t|\n"
-	f, err := os.OpenFile(filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	check(err)
-	_, err = f.Write([]byte(header))
-	check(err)
-	_, err = f.Write([]byte(delim))
-	check(err)
-
-	tokens := make([]token, 0)
-	for t := range l.tokens {
-		tokens = append(tokens, t)
-		fmtStr := "|\t\t" + t.val + "\t\t|" + "\t\t" + parseTokenType(t) + "\t\t|\t\t" + strconv.Itoa(t.line) + "\t\t|\n"
-		_, err = f.Write([]byte(fmtStr))
+	if outputFileName != "" {
+		delim := "-----------------------------------------------------------------------------------------------------------------\n"
+		header := "|\t\t" + "Valor" + "\t\t|" + "\t\t" + "Tipo" + "\t\t|\t\t\t" + "Linha" + "\t\t\t|\n"
+		f, err := os.OpenFile(outputFileName, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 		check(err)
-		_, err = f.Write([]byte(delim))
-		check(err)
-	}
-
-	errorList := checkErrors(tokens)
-	if len(errorList) > 0 {
-		delim = "\n\n----------------------------------------------------------------\n"
-		_, err = f.Write([]byte(delim))
-		fmtStr := "|\t\t\tLista de Erro(s)\t\t\t|\n"
-		delim = "----------------------------------------------------------------\n"
-		_, err = f.Write([]byte(fmtStr))
-		check(err)
-		_, err = f.Write([]byte(delim))
-		check(err)
-		header = "|\t\t\tTIPO\t\t\t|\tLINHA\t|\n"
 		_, err = f.Write([]byte(header))
 		check(err)
 		_, err = f.Write([]byte(delim))
 		check(err)
 
-		for i := range errorList {
-			t := errorList[i]
-			fmtStr = "|\t\t" + parseTokenType(t) + "\t\t|\t" + strconv.Itoa(t.line) + "\t|\n"
+		tokens := make([]token, 0)
+		for t := range l.tokens {
+			tokens = append(tokens, t)
+			fmtStr := "|\t\t" + t.Val + "\t\t|" + "\t\t" + parseTokenType(t) + "\t\t|\t\t" + strconv.Itoa(t.line) + "\t\t|\n"
 			_, err = f.Write([]byte(fmtStr))
 			check(err)
 			_, err = f.Write([]byte(delim))
 			check(err)
 		}
-	} else {
-		fmtStr := "|\tNENHUM ERRO ENCONTRADO\t|\n"
-		_, err = f.Write([]byte(fmtStr))
-		check(err)
+
+		errorList := checkErrors(tokens)
+		if len(errorList) > 0 {
+			delim = "\n\n----------------------------------------------------------------\n"
+			_, err = f.Write([]byte(delim))
+			fmtStr := "|\t\t\tLista de Erro(s)\t\t\t|\n"
+			delim = "----------------------------------------------------------------\n"
+			_, err = f.Write([]byte(fmtStr))
+			check(err)
+			_, err = f.Write([]byte(delim))
+			check(err)
+			header = "|\t\t\tTIPO\t\t\t|\tLINHA\t|\n"
+			_, err = f.Write([]byte(header))
+			check(err)
+			_, err = f.Write([]byte(delim))
+			check(err)
+
+			for i := range errorList {
+				t := errorList[i]
+				fmtStr = "|\t\t" + parseTokenType(t) + "\t\t|\t" + strconv.Itoa(t.line) + "\t|\n"
+				_, err = f.Write([]byte(fmtStr))
+				check(err)
+				_, err = f.Write([]byte(delim))
+				check(err)
+			}
+		} else {
+			fmtStr := "|\tNENHUM ERRO ENCONTRADO\t|\n"
+			_, err = f.Write([]byte(fmtStr))
+			check(err)
+		}
 	}
 }
 
@@ -389,7 +397,7 @@ func lexString(l *lexer) stateFn {
 	for {
 		switch r := l.next(); {
 		case strings.IndexRune("\"", r) >= 0:
-			l.next()
+			//l.next()
 			l.emit(tokenString)
 			return lexText
 		case r == rune(tokenEOF):
@@ -422,16 +430,16 @@ func (l *lexer) isIdentifier(r rune) bool {
 }
 
 func (i token) String() string {
-	switch i.typ {
+	switch i.Typ {
 	case tokenEOF:
 		return "EOF"
 	case tokenError:
-		return i.val
+		return i.Val
 	}
-	if len(i.val) > 10 {
-		return fmt.Sprintf("%.10q...", i.val)
+	if len(i.Val) > 10 {
+		return fmt.Sprintf("%.10q...", i.Val)
 	}
-	return fmt.Sprintf("%q", i.val)
+	return fmt.Sprintf("%q", i.Val)
 }
 
 /* emitIfKeyword Identify whether is a keyword if so, emit.
@@ -441,64 +449,64 @@ although, intentionally using a switch may be useful for distinction
 */
 func (l *lexer) emitIfKeyword() bool {
 	switch word := l.input[l.start:l.pos]; {
-	case word == programKeyword:
+	case word == ProgramKeyword:
 		l.emit(tokenKeyword)
 		return true
-	case word == varKeyword:
+	case word == VarKeyword:
 		l.emit(tokenKeyword)
 		return true
-	case word == constKeyword:
+	case word == ConstKeyword:
 		l.emit(tokenKeyword)
 		return true
-	case word == registerKeyword:
+	case word == RegisterKeyword:
 		l.emit(tokenKeyword)
 		return true
-	case word == functionKeyword:
+	case word == FunctionKeyword:
 		l.emit(tokenKeyword)
 		return true
-	case word == procedureKeyword:
+	case word == ProcedureKeyword:
 		l.emit(tokenKeyword)
 		return true
-	case word == returnKeyword:
+	case word == ReturnKeyword:
 		l.emit(tokenKeyword)
 		return true
-	case word == mainKeyword:
+	case word == MainKeyword:
 		l.emit(tokenKeyword)
 		return true
-	case word == ifKeyword:
+	case word == IfKeyword:
 		l.emit(tokenKeyword)
 		return true
-	case word == elseKeyword:
+	case word == ElseKeyword:
 		l.emit(tokenKeyword)
 		return true
-	case word == whileKeyword:
+	case word == WhileKeyword:
 		l.emit(tokenKeyword)
 		return true
-	case word == readKeyword:
+	case word == ReadKeyword:
 		l.emit(tokenKeyword)
 		return true
-	case word == writeKeyword:
+	case word == WriteKeyword:
 		l.emit(tokenKeyword)
 		return true
-	case word == integerKeyword:
+	case word == IntegerKeyword:
 		l.emit(tokenKeyword)
 		return true
-	case word == realKeyword:
+	case word == RealKeyword:
 		l.emit(tokenKeyword)
 		return true
-	case word == booleanKeyword:
+	case word == BooleanKeyword:
 		l.emit(tokenKeyword)
 		return true
-	case word == charKeyword:
+	case word == CharKeyword:
 		l.emit(tokenKeyword)
 		return true
-	case word == stringKeyword:
+	case word == StringKeyword:
 		l.emit(tokenKeyword)
 		return true
-	case word == trueKeyword:
+	case word == TrueKeyword:
 		l.emit(tokenKeyword)
 		return true
-	case word == falseKeyword:
+	case word == FalseKeyword:
 		l.emit(tokenKeyword)
 		return true
 	default:
@@ -562,8 +570,8 @@ func (l *lexer) Debug() {
 	fmt.Println(l.width)
 	fmt.Println("token list: ")
 	for i := range l.tokens {
-		fmt.Println("value: ", i.val)
-		fmt.Println("type index: ", i.typ)
+		fmt.Println("value: ", i.Val)
+		fmt.Println("type index: ", i.Typ)
 		fmt.Println("type name: ", [...]string{"tokenError",
 			"tokenKeyword",
 			"tokenLetter",
@@ -593,7 +601,7 @@ func (l *lexer) Debug() {
 			"tokenMalformedLogicalOp",
 			"tokenMalformedArithmeticOp",
 
-			"programKeyword",
+			"ProgramKeyword",
 			"varKeyword",
 			"constKeyword",
 			"registerKeyword",
@@ -612,8 +620,8 @@ func (l *lexer) Debug() {
 			"charKeyword",
 			"stringKeyword",
 			"trueKeyword",
-			"falseKeyword"}[i.typ])
-		fmt.Println("length: ", len(i.val))
+			"falseKeyword"}[i.Typ])
+		fmt.Println("length: ", len(i.Val))
 		fmt.Println("--------------------------------")
 	}
 }
@@ -624,7 +632,7 @@ func checkErrors(tokens []token) []token {
 
 	for t := range tokens {
 		for e := range errorList {
-			if errorList[e] == tokens[t].typ {
+			if errorList[e] == tokens[t].Typ {
 				errors = append(errors, tokens[t])
 			}
 		}
@@ -662,7 +670,7 @@ func parseTokenType(t token) string {
 		"tokenMalformedLogicalOp",
 		"tokenMalformedArithmeticOp",
 
-		"programKeyword",
+		"ProgramKeyword",
 		"varKeyword",
 		"constKeyword",
 		"registerKeyword",
@@ -681,5 +689,5 @@ func parseTokenType(t token) string {
 		"charKeyword",
 		"stringKeyword",
 		"trueKeyword",
-		"falseKeyword"}[t.typ]
+		"falseKeyword"}[t.Typ]
 }
