@@ -63,6 +63,56 @@ const (
 	falseKeyword     = "false"
 )
 
+var types = [...]string{"tokenError",
+	"tokenKeyword",
+	"tokenLetter",
+	"tokenIdentifier",
+	"tokenDigit",
+	"tokenNumber",
+	"tokenArithmeticOp",
+	"tokenBlockComment",
+	"tokenEOF",
+	"tokenRelationalOp",
+	"tokenLogicalOp",
+	"tokenDelimiter",
+	"tokenChar",
+	"tokenMalformedChar",
+
+	"tokenIf",
+	"tokenLeftMeta",
+	"tokenPipe",
+	"tokenRange",
+	"tokenRawString",
+	"tokenRightMeta",
+	"tokenString",
+	"tokenText",
+	"tokenMalformedNumber",
+	"tokenMalformedComment",
+	"tokenMalformedString",
+	"tokenMalformedLogicalOp",
+	"tokenMalformedArithmeticOp",
+
+	"programKeyword",
+	"varKeyword",
+	"constKeyword",
+	"registerKeyword",
+	"functionKeyword",
+	"procedureKeyword",
+	"returnKeyword",
+	"mainKeyword",
+	"ifKeyword",
+	"elseKeyword",
+	"whileKeyword",
+	"readKeyword",
+	"writeKeyword",
+	"integerKeyword",
+	"realKeyword",
+	"booleanKeyword",
+	"charKeyword",
+	"stringKeyword",
+	"trueKeyword",
+	"falseKeyword"}
+
 // token Defines a Token (token) structure.
 type token struct {
 	typ  tokenType
@@ -563,59 +613,11 @@ func (l *lexer) Debug() {
 	fmt.Println("Last token width: ")
 	fmt.Println(l.width)
 	fmt.Println("token list: ")
-	for i := range l.tokens {
-		fmt.Println("value: ", i.val)
-		fmt.Println("type index: ", i.typ)
-		fmt.Println("type name: ", [...]string{"tokenError",
-			"tokenKeyword",
-			"tokenLetter",
-			"tokenIdentifier",
-			"tokenDigit",
-			"tokenNumber",
-			"tokenArithmeticOp",
-			"tokenBlockComment",
-			"tokenEOF",
-			"tokenRelationalOp",
-			"tokenLogicalOp",
-			"tokenDelimiter",
-			"tokenChar",
-			"tokenMalformedChar",
-
-			"tokenIf",
-			"tokenLeftMeta",
-			"tokenPipe",
-			"tokenRange",
-			"tokenRawString",
-			"tokenRightMeta",
-			"tokenString",
-			"tokenText",
-			"tokenMalformedNumber",
-			"tokenMalformedComment",
-			"tokenMalformedString",
-			"tokenMalformedLogicalOp",
-			"tokenMalformedArithmeticOp",
-
-			"programKeyword",
-			"varKeyword",
-			"constKeyword",
-			"registerKeyword",
-			"functionKeyword",
-			"procedureKeyword",
-			"returnKeyword",
-			"mainKeyword",
-			"ifKeyword",
-			"elseKeyword",
-			"whileKeyword",
-			"readKeyword",
-			"writeKeyword",
-			"integerKeyword",
-			"realKeyword",
-			"booleanKeyword",
-			"charKeyword",
-			"stringKeyword",
-			"trueKeyword",
-			"falseKeyword"}[i.typ])
-		fmt.Println("length: ", len(i.val))
+	for token := range l.tokens {
+		fmt.Println("value: ", token.val)
+		fmt.Println("type index: ", token.typ)
+		fmt.Println("type name: ", parseTokenType(token))
+		fmt.Println("length: ", len(token.val))
 		fmt.Println("--------------------------------")
 	}
 }
@@ -634,54 +636,6 @@ func checkErrors(tokens []token) []token {
 	return errors
 }
 
-func parseTokenType(t token) string {
-	return [...]string{"tokenError",
-		"tokenKeyword",
-		"tokenLetter",
-		"tokenIdentifier",
-		"tokenDigit",
-		"tokenNumber",
-		"tokenArithmeticOp",
-		"tokenBlockComment",
-		"tokenEOF",
-		"tokenRelationalOp",
-		"tokenLogicalOp",
-		"tokenDelimiter",
-		"tokenChar",
-		"tokenMalformedChar",
-
-		"tokenIf",
-		"tokenLeftMeta",
-		"tokenPipe",
-		"tokenRange",
-		"tokenRawString",
-		"tokenRightMeta",
-		"tokenString",
-		"tokenText",
-		"tokenMalformedNumber",
-		"tokenMalformedComment",
-		"tokenMalformedString",
-		"tokenMalformedLogicalOp",
-		"tokenMalformedArithmeticOp",
-
-		"programKeyword",
-		"varKeyword",
-		"constKeyword",
-		"registerKeyword",
-		"functionKeyword",
-		"procedureKeyword",
-		"returnKeyword",
-		"mainKeyword",
-		"ifKeyword",
-		"elseKeyword",
-		"whileKeyword",
-		"readKeyword",
-		"writeKeyword",
-		"integerKeyword",
-		"realKeyword",
-		"booleanKeyword",
-		"charKeyword",
-		"stringKeyword",
-		"trueKeyword",
-		"falseKeyword"}[t.typ]
+func parseTokenType(token token) string {
+	return types[token.typ]
 }

@@ -1,7 +1,7 @@
 package main
 
 import (
-	"compiladores/Compiler"
+	Compiler "compiladores/Compiler/analyzer"
 	"io/ioutil"
 	"log"
 	"os"
@@ -45,5 +45,6 @@ func Run() {
 }
 
 func main() {
-	Run()
+	//Run()
+	Compiler.Syntax()
 }
