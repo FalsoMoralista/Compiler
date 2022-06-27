@@ -49,14 +49,18 @@ func compareType(t token, tp2 string) bool {
 	return t.typ == parseTokenTypeByString(tp2)
 }
 
-func verifyDelimiter(tokenValue string, next bool) bool {
-	if compareType(lookAhead(1), "tokenDelimiter") && (lookAhead(1).val == tokenValue || lookAhead(1).typ == 8) {
+func verifyToken(tokenType string, tokenValue string, next bool) bool {
+	if compareType(lookAhead(1), tokenType) && (tokenValue == "{any token value here}" || lookAhead(1).val == tokenValue || lookAhead(1).typ == 8) {
 		if next {
 			nextToken()
 		}
 		return true
 	}
 	return false
+}
+
+func verifyDelimiter(tokenValue string, next bool) bool {
+	return verifyToken("tokenDelimiter", tokenValue, next)
 }
 
 func match(tokenTpy string, lookAheadSync int) bool {
@@ -78,7 +82,7 @@ func syntaxError(tokenTpy string, lookAheadSync int) {
 	}
 }
 
-func debug(message ...string) {
+func debug(die bool, message ...string) {
 	fmt.Println()
 	fmt.Println("======================= [[ DEBUG ]] =======================")
 	fmt.Println()
@@ -91,7 +95,9 @@ func debug(message ...string) {
 	fmt.Println()
 	fmt.Println("===================== [[ END DEBUG ]] =====================")
 	fmt.Println()
-	os.Exit(0)
+	if die {
+		os.Exit(0)
+	}
 }
 
 // <Start> ::= 'program' Identifier ';' <GlobalStatement>
@@ -182,7 +188,10 @@ func constDeclaration() {
 	varType()
 	match("tokenIdentifier", 1)
 	match("tokenArithmeticOp", 1)
-	match("tokenNumber", 1) // values
+
+	//match("tokenNumber", 1) // value
+	value()
+
 	constDeclaration1()
 }
 
@@ -194,6 +203,29 @@ func constDeclaration1() {
 		match("tokenDelimiter", 2)
 		match("tokenIdentifier", 1)
 		constDeclaration1()
+	}
+}
+
+// <Value>  ::= Decimal | RealNumber | StringLiteral | Identifier <ValueRegister> | Char | Boolean
+func value() {
+	if verifyToken("tokenNumber", "{any token value here}", true) {
+		return
+	} else if verifyToken("tokenString", "{any token value here}", true) {
+		return
+	} else if verifyToken("tokenIdentifier", "{any token value here}", true) {
+		valueRegister()
+	} else if verifyToken("tokenChar", "{any token value here}", true) {
+		return
+	} else if verifyToken("tokenKeyword", "{any token value here}", true) {
+		return
+	}
+}
+
+// <ValueRegister> ::= '.' Identifier |
+func valueRegister() {
+	if verifyDelimiter(".", false) {
+		match("tokenDelimiter", 2)
+		match("tokenIdentifier", 1)
 	}
 }
 
@@ -254,8 +286,3 @@ func registerDeclaration1() {
 }
 
 // ====================================== PROCEDURE ======================================
-
-// <Value>  ::= Decimal | RealNumber | StringLiteral | Identifier <ValueRegister> | Char | Boolean
-func value() {
-	// todo: values
-}
