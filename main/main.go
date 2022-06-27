@@ -45,6 +45,6 @@ func Run() {
 }
 
 func main() {
-	//Run()
-	Compiler.Syntax()
+	Run()
+	//Compiler.Syntax()
 }

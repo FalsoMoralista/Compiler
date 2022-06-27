@@ -155,7 +155,9 @@ func Lex(name, fileNameOutput, input string) *lexer {
 	for !open { // Waits until channel is not closed...
 
 	}
-	outputTokens(l)
+	//outputTokensInFile(l)
+	Syntax(l)
+
 	return l
 }
 
@@ -165,7 +167,7 @@ func check(e error) {
 	}
 }
 
-func outputTokens(l *lexer) {
+func outputTokensInFile(l *lexer) {
 	delim := "-----------------------------------------------------------------------------------------------------------------\n"
 	header := "|\t\t" + "Valor" + "\t\t|" + "\t\t" + "Tipo" + "\t\t|\t\t\t" + "Linha" + "\t\t\t|\n"
 	f, err := os.OpenFile(outputFileName, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
@@ -638,4 +640,13 @@ func checkErrors(tokens []token) []token {
 
 func parseTokenType(token token) string {
 	return types[token.typ]
+}
+
+func parseTokenTypeByString(tp string) tokenType {
+	for i := 0; i < len(types); i++ {
+		if types[i] == tp {
+			return tokenType(i)
+		}
+	}
+	return -1
 }

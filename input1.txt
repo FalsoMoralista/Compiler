@@ -1,1 +1,21 @@
-2 if a a2a1_a_ 2 +3 -44 -4.5 ++ -- * / */  /# abc abc abc abc abc abc #/ /# aaa #/ #/
+program Programa1;
+
+var
+{
+	integer cont;
+}
+
+const
+{
+	integer MINIDADE = 18;
+	integer MAXIDADE = 69;
+	real MINPESO = 50.0;
+}
+
+register Pessoa
+{
+	integer idade;
+	real peso;
+	string nome;
+}
+

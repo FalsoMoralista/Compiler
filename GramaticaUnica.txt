@@ -1,0 +1,172 @@
+"Name"    = 'PBL-02 Gramática'
+"About"   = 'Escrita da gramática única'
+
+"Case Sensitive" = 'True'
+
+"Start Symbol" = <Start>
+                              
+Identifier = {Letter}({AlphaNumeric}| '_')*
+Decimal = {Digit}+
+RealNumber = {Digit}*'.'{Digit}+
+Boolean = 'true'|'false'
+{String Ch} = {Printable} - ['']
+{Char Ch} = {Printable} - ["]
+StringLiteral = '"'{String Ch}*'"'
+Char = '' ( {Char Ch} | '\'{Printable} )''
+
+Comment Start = '/#'
+Comment End   = '#/'
+Comment Line  = '%' 
+
+<Start> ::= 'program' Identifier ';' <GlobalStatement>
+         
+<GlobalStatement> ::= <VarStatement> <ConstStatement> <RegisterStatement><ProcedureStatement><FunctionStatement> <Main>
+
+! Declaracao Var                     
+<VarStatement>::= 'var' '{' <VarList>
+<VarList>::= <VarDeclaration> <VarList1>
+          | '}' 
+<VarList1>::= <VarDeclaration> <VarList1>
+           | '}'
+<VarDeclaration>::= <VarType> Identifier <VarDeclaration1>
+<VarDeclaration1>::= ',' Identifier <VarDeclaration1>
+                  | ';'
+<VarType>::= 'integer'
+          | 'string'
+          | 'real'
+          | 'boolean'
+          | 'char'
+          | Identifier
+
+! Declaracao Const
+<ConstStatement> ::= 'const' '{' <ConstList>
+<ConstList>::= <ConstDeclaration> <ConstList1>
+<ConstList1> ::= <ConstDeclaration> <ConstList1>
+              | '}'
+<ConstDeclaration> ::= <ConstType> Identifier '=' <Value> <ConstDeclaration1>
+<ConstDeclaration1> ::= ',' Identifier  '=' <Value> <ConstDeclaration1> | ';'
+<ConstType> ::= 'integer'
+             | 'string'
+             | 'real'
+             | 'boolean'
+             | 'char'
+
+<Value>  ::= Decimal
+          | RealNumber
+          | StringLiteral
+          | Identifier <ValueRegister>
+          | Char
+          | Boolean
+<ValueRegister> ::= '.' Identifier |
+! Declaracao Register
+<RegisterStatementMultiple> ::= <RegisterStatement>
+                             |
+<RegisterStatement> ::= 'register' Identifier '{' <RegisterList>
+<RegisterList> ::= <RegisterDeclaration> <RegisterList1>
+<RegisterList1> ::= <RegisterDeclaration> <RegisterList1>
+                 | '}' <RegisterStatementMultiple>
+<RegisterDeclaration> ::= <ConstType> Identifier <RegisterDeclaration1>
+<RegisterDeclaration1> ::= ',' Identifier <RegisterDeclaration1>
+                        | ';'
+
+! Declaração Function e Procedure (Com repetição já)
+<ProcedureStatement> ::= 'procedure' Identifier '(' <ParameterProcedure> '{' <LocalStatement> <ProcedureStatement1> |
+<ProcedureStatement1> ::= '}' | '}' 'procedure' Identifier '(' <ParameterProcedure> '{' <LocalStatement>  <ProcedureStatement1>
+<ParameterProcedure> ::= <VarType> Identifier <ParameterListProcedure> | ')'
+<ParameterListProcedure> ::=   ',' <ParameterProcedure> |  ')'          
+<ParameterFunction> ::= <VarType> Identifier <ParameterListFunction> | ')' ':' <VarType>
+<ParameterListFunction> ::=   ',' <ParameterFunction> |  ')' ':' <VarType>                
+<FunctionStatement>::= 'function' Identifier  '(' <ParameterFunction> '{' <LocalStatement> 'return' <Value>';' <FunctionStatement1> |
+<FunctionStatement1>::= '}' | '}' 'function' Identifier  '(' <ParameterFunction>  '{' <LocalStatement> 'return' <Value>';' <FunctionStatement1> 
+
+! Atribuição
+<Assigment> ::= Identifier <AssigmentRegister>
+<AssigmentRegister> ::= '.' Identifier '=' <AssigmentOperators> ';'
+                     | '=' <AssigmentOperators> ';'
+                     | '++' ';'
+                     | '--' ';'
+<AssigmentOperators> ::= <Value> | <BinaryExpression> | <UnaryExpression>
+         
+
+! Expressão
+<BinaryExpression> ::= <AddendOperator> <BinaryExpressionContin> 
+
+<BinaryExpressionContin> ::= '+' <AddendOperator> 
+                    | '-' <AddendOperator>
+                    | '*' <AddendOperator>
+                    | '/' <AddendOperator>
+                    | '++'
+                    | '--'
+                    | <RelationalExpression>
+                    | <LogicalExpression>
+<RelationalExpression> ::= '<' <AddendOperator>
+                    | '>' <AddendOperator>
+                    | '!=' <AddendOperator>
+                    | '<=' <AddendOperator>
+                    | '>=' <AddendOperator>
+                    | '==' <AddendOperator>
+<LogicalExpression> ::= '||' <AddendOperator>
+                     | '&&' <AddendOperator>
+
+<AddendOperator> ::= Identifier | Decimal | RealNumber | Boolean                  
+
+<UnaryExpression> ::= '!' <AddendOperatorUnary>
+<AddendOperatorUnary> ::= Identifier | Boolean
+
+!Declaracoes Logicas
+<AssignExpr> ::= <LogicalOrExpression> |
+<LogicalOrExpression> ::= <LogicalAndExpression> <LogicalOrExpression1>       
+<LogicalOrExpression1> ::= '||' <LogicalAndExpression> <LogicalOrExpression1> | 
+<LogicalAndExpression> ::= <Condition> <LogicalAndExpression1>            
+<LogicalAndExpression1> ::= '&&' <Condition> <LogicalAndExpression1> |
+                         
+! Chamada de função
+<FunctionCall> ::= Identifier '=' Identifier '(' <Argument> ')' ';'
+<Argument> ::= <Value> <ArgumentList> |
+<ArgumentList> ::= ',' <Argument> |
+
+! Chamada de procedure
+<ProcedureCall> ::= Identifier '(' <Argument> ')' ';'
+
+! Declaração Main
+<Main> ::= 'main' '{' <LocalStatement> '}'
+
+! Blocos
+<LocalStatement> ::= <VarStatement> <LocalCommands> 
+
+<LocalCommands> ::= <IfDecs> <LocalCommands>
+                  | <WriteDecs> <LocalCommands>
+                  | <ReadDecs> <LocalCommands>
+                  | <WhileDecs> <LocalCommands>
+                  | <Assigment> <LocalCommands>
+                  | <FunctionCall> <LocalCommands>
+                  | <ProcedureCall> <LocalCommands>
+                  |
+             
+!Condicao
+<Condition> ::= <AddendOperator> <ConditionContin>
+<ConditionContin> ::= <RelationalExpression> | <LogicalExpression>
+ 
+             
+!Declaracao If/Else
+<IfDecs> ::= 'if' '(' <AssignExpr> ')' '{' <LocalCommands> '}' <ElseDecs>                                                    
+<ElseDecs>::= 'else' '{' <LocalCommands> '}' |
+
+!Declaracao while
+<WhileDecs>::= 'while' '('<AssignExpr>')' '{' <LocalCommands> '}'  
+                 
+!Declaração Write 
+<WriteDecs> ::= 'print' '(' <ArgumentsWrite>
+<ArgumentsWrite> ::= Identifier <RegisterWrite> <ListArgumentsWrite>
+                  | <WriteContent> <ListArgumentsWrite>
+<WriteContent> ::= Decimal | RealNumber | StringLiteral
+<RegisterWrite> ::= '.' Identifier |
+<ListArgumentsWrite> ::= ',' <ArgumentsWrite>
+                      | ')' ';'
+
+!Declaração Read
+<ReadDecs> ::= 'read' '(' <ArgumentsRead>
+<ArgumentsRead> ::= Identifier <RegisterRead> <ListArgumentsRead>
+<RegisterRead> ::= '.' Identifier |
+<ListArgumentsRead> ::= ',' <ArgumentsRead>
+                      | ')' ';' 
